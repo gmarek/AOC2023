@@ -18,7 +18,6 @@ var debug = false
 type sequence []string
 
 type fingerprint struct {
-  p string
   c string
   i int
   force_true, force_false bool
@@ -29,7 +28,7 @@ func getFingerprint(p sequence, c []int, i int, force_true, force_false bool) fi
   for _, v := range c {
     s = append(s, strconv.Itoa(v))
   }
-  return fingerprint{strings.Join(p, ""), strings.Join(s, ""), i, force_true, force_false}
+  return fingerprint{strings.Join(s, ","), i, force_true, force_false}
 }
 
 func options(p_in sequence, con_in []int, i int, force_true bool, force_false bool, cache map[fingerprint]int) int {
@@ -132,7 +131,9 @@ func main() {
   sum := 0
   count := 0
   for scan.Scan() {
-    fmt.Printf("%v\n", count)
+    if debug {
+      fmt.Printf("%v\n", count)
+    }
     count++
     pattern := sequence{}
     constraints := []int{}
@@ -166,7 +167,9 @@ func main() {
 
     cache := map[fingerprint]int{}
     opts := options(pattern, constraints, 0, false, false, cache)
-    fmt.Printf("%v\n", opts)
+    if debug {
+      fmt.Printf("%v\n", opts)
+    }
     sum += opts
   }
 
