@@ -1,0 +1,180 @@
+package main
+
+import (
+  "bufio"
+  "crypto/sha256"
+  "flag"
+  "fmt"
+//  "math"
+  "os"
+//  "sort"
+//  "strconv"
+  "strings"
+//  "unicode"
+)
+
+var prod = flag.Bool("real", false, "run on real input")
+var debug = false
+
+const empty = "."
+const static = "#"
+const stone = "O"
+
+func fingerprint(d [][]string) string {
+  rows := []string{}
+  for _, r := range d {
+    rows = append(rows, strings.Join([]string(r), ""))
+  }
+  return fmt.Sprintf("%x\n", sha256.Sum256([]byte(strings.Join(rows, ""))))
+}
+
+func printDish(d [][]string) {
+  if !debug {
+    return
+  }
+  for y := 0; y < len(d); y++ {
+    for x := 0; x < len(d[0]); x++ {
+      if d[y][x] == empty {
+	fmt.Print(".")
+      }
+      if d[y][x] == static {
+	fmt.Print("#")
+      }
+      if d[y][x] == stone {
+	fmt.Print("O")
+      }
+    }
+    fmt.Println()
+  }
+  fmt.Println()
+}
+
+func tilt(dish [][]string) [][]string {
+  for y := 0; y < len(dish); y++ {
+    for x := 0; x < len(dish[0]); x++ {
+      if dish[y][x] != stone {
+	continue
+      }
+      for z := y-1; z >= 0; z-- {
+	if dish[z][x] == empty {
+	  dish[z][x] = stone
+	  dish[z+1][x] = empty
+	} else {
+	  break
+	}
+      }
+    }
+  }
+  printDish(dish)
+  for y := 0; y < len(dish); y++ {
+    for x := 0; x < len(dish[0]); x++ {
+      if dish[y][x] != stone {
+	continue
+      }
+      for z := x-1; z >= 0; z-- {
+	if dish[y][z] == empty {
+	  dish[y][z] = stone
+	  dish[y][z+1] = empty
+	} else {
+	  break
+	}
+      }
+    }
+  }
+  printDish(dish)
+  for y := len(dish) - 1; y >= 0; y-- {
+    for x := 0; x < len(dish[0]); x++ {
+      if dish[y][x] != stone {
+	continue
+      }
+      for z := y+1; z < len(dish); z++ {
+	if dish[z][x] == empty {
+	  dish[z][x] = stone
+	  dish[z-1][x] = empty
+	} else {
+	  break
+	}
+      }
+    }
+  }
+  printDish(dish)
+  for y := 0; y < len(dish); y++ {
+    for x := len(dish[0]) - 1; x >= 0; x-- {
+      if dish[y][x] != stone {
+	continue
+      }
+      for z := x+1; z < len(dish[0]); z++ {
+	if dish[y][z] == empty {
+	  dish[y][z] = stone
+	  dish[y][z-1] = empty
+	} else {
+	  break
+	}
+      }
+    }
+  }
+  printDish(dish)
+  return dish
+}
+
+type result struct {
+  index, weight int
+}
+
+func main() {
+  flag.Parse()
+
+  filename := "test"
+  if *prod {
+    filename = "input"
+  }
+  f, err := os.Open(filename)
+  if err != nil {
+    panic(err)
+  }
+
+  scan := bufio.NewScanner(bufio.NewReader(f))
+
+  dish := [][]string{}
+  for scan.Scan() {
+    row := []string{}
+    for _, c := range scan.Text() {
+      if string(c) == "." {
+	row = append(row, empty)
+      } else if string(c) == "#" {
+	row = append(row, static)
+      } else if string(c) == "O" {
+	row = append(row, stone)
+      }
+    }
+    dish = append(dish, row)
+  }
+
+  target := 1000000000
+  cache := map[string]result{}
+  for i := 0; i < 10000; i++ {
+    dish = tilt(dish)
+    fgp := fingerprint(dish)
+    if _, ok := cache[fgp]; ok {
+      fmt.Printf("found: %v %v %v\n", fgp, i, cache[fgp].index)
+      target -= cache[fgp].index
+      target = target % (i - cache[fgp].index + 1)
+      for _, v := range cache {
+	if v.index - cache[fgp].index == target {
+	  fmt.Printf("%v\n", v.weight)
+	  return
+	}
+      }
+    }
+    sum := 0
+    for y := 0; y < len(dish); y++ {
+      for x := 0; x < len(dish[0]); x++ {
+	if dish[y][x] == stone {
+	  sum += len(dish) - y
+	}
+      }
+    }
+
+    cache[fgp] = result{i, sum}
+  }
+}
