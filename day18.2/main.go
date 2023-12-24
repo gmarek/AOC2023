@@ -26,6 +26,7 @@ const right = 1
 type dig struct {
   dir int
   l int
+  orientation int
 }
 
 func max(a, b int) int {
@@ -68,6 +69,20 @@ func prevInd(i int, s []point) int {
 
 func neigh(i int, s []point) []int {
   return []int{prevInd(i, s), nextInd(i, s)}
+}
+
+func orientation(prev, cur int) int {
+  turnMap := map[int]point{
+    n: point{0, -1, 0, true},
+    s: point{0, 1, 0, true},
+    e: point{1, 0, 0, true},
+    w: point{-1, 0, 0, true},
+  }
+
+  if turnMap[prev].x * turnMap[cur].y - turnMap[prev].y * turnMap[cur].x < 0 {
+    return right
+  }
+  return left
 }
 
 func cutRectangle(s []point) (int, [][]point) {
@@ -296,22 +311,6 @@ func remove(s *[]point, i int) {
   }
 }
 
-func insertTurn(turns *[]int, t int, global int) int {
-  if len(*turns) < 2 {
-    *turns = append(*turns, t)
-    return 1
-  }
-  (*turns)[0] = (*turns)[1]
-  (*turns)[1] = t
-  if (*turns)[1] != (*turns)[0] {
-    return 0
-  }
-  if (*turns)[1] == global {
-    return 1
-  }
-  return -1
-}
-
 func main() {
   flag.Parse()
 
@@ -330,6 +329,7 @@ func main() {
   for scan.Scan() {
     d := dig{}
     dString := ""
+
     fmt.Sscanf(scan.Text(), "%s %d", &dString, &d.l)
     switch dString {
     case "R": d.dir = e
@@ -337,7 +337,8 @@ func main() {
     case "L": d.dir = w
     case "U": d.dir = n
     }
-    /*sTrash := ""
+    /*
+    sTrash := ""
     iTrash := 0
     fmt.Sscanf(scan.Text(), "%s %d %s", &sTrash, &iTrash, &dString)
     lString := dString[2:len(dString) - 2]
@@ -348,122 +349,62 @@ func main() {
     digs = append(digs, d)
   }
 
-  shape := []point{{0, 0, digs[len(digs)-1].dir, false}}
-  turns := []int{}
-  prev := -1
-  globalTurn := -1
-  for _, d := range digs {
-    if len(turns) == 1 {
-      globalTurn = turns[0]
+  countLeft := 0
+  for i, d := range digs {
+    digs[i].orientation = orientation(d.dir, digs[(i+1)%len(digs)].dir)
+    if digs[i].orientation == left {
+      countLeft++
+    } else {
+      countLeft--
+    }
+  }
+
+  globalTurn := 0
+  if countLeft == 4 {
+    globalTurn = left
+  } else if countLeft == -4 {
+    globalTurn = right
+  } else {
+    panic(fmt.Sprintf("countLeft: %v\n", countLeft))
+  }
+
+  shape := []point{{0, 0, digs[len(digs)-1].dir, digs[len(digs)-1].orientation == globalTurn}}
+  for i, d := range digs {
+    pInd := i-1
+    if pInd < 0 {
+      pInd = len(digs)-1
     }
     offset := 0
-    turn := 5
-    if prev == -1 {
-      prev = d.dir
-    } else {
-      switch d.dir {
-      case n: {
-	if prev == e {
-	  offset = insertTurn(&turns, left, globalTurn)
-	  shape[len(shape)-1].x += offset
-	  turn = left
-	} else {
-	  offset = insertTurn(&turns, right, globalTurn)
-	  shape[len(shape)-1].x -= offset
-	  turn = right
-	}
+    if digs[pInd].orientation == d.orientation {
+      if d.orientation == globalTurn {
+	offset = 1
+      } else {
+	offset = -1
       }
-      case e: {
-	if prev == n {
-	  offset = insertTurn(&turns, right, globalTurn)
-	  shape[len(shape)-1].y -= offset
-	  turn = right
-	} else {
-	  offset = insertTurn(&turns, left, globalTurn)
-	  shape[len(shape)-1].y += offset
-	  turn = left
-	}
-      }
-      case s: {
-	if prev == e {
-	  offset = insertTurn(&turns, right, globalTurn)
-	  shape[len(shape)-1].x += offset
-	  turn = right
-	} else {
-	  offset = insertTurn(&turns, left, globalTurn)
-	  shape[len(shape)-1].x -= offset
-	  turn = left
-	}
-      }
-      case w: {
-	if prev == n {
-	  offset = insertTurn(&turns, left, globalTurn)
-	  shape[len(shape)-1].y -= offset
-	  turn = left
-	} else {
-	  offset = insertTurn(&turns, right, globalTurn)
-	  shape[len(shape)-1].y += offset
-	  turn = right
-	}
-      }
-      }
-      prev = d.dir
     }
-    next := point{shape[len(shape) - 1].x, shape[len(shape) - 1].y, d.dir, len(turns) < 2}
-    if len(turns) == 2 {
-      shape[len(shape)-1].inTurn = (turn == globalTurn)
+    if debug {
+      fmt.Printf("dig: %v, offset: %v\n", d, offset)
     }
+    next := point{shape[len(shape) - 1].x, shape[len(shape) - 1].y, d.dir, d.orientation == globalTurn}
     switch d.dir {
     case n: {
-      next.y -= d.l
+      next.y -= d.l + offset
     }
     case e: {
-      next.x += d.l
+      next.x += d.l + offset
     }
     case s: {
-      next.y += d.l
+      next.y += d.l + offset
     }
     case w: {
-      next.x -= d.l
+      next.x -= d.l + offset
     }
     }
     shape = append(shape, next)
   }
 
+  fmt.Printf("shape: %v\n", shape)
   shape = shape[:len(shape)-1]
-  if debug {
-    fmt.Printf("global turns: %v\n", globalTurn)
-  }
-  switch digs[len(digs)-1].dir {
-  case n: {
-    if digs[0].dir == e {
-      shape[0].inTurn = (right == globalTurn)
-    } else {
-     shape[0].inTurn = (left == globalTurn)
-    }
-  }
-  case e: {
-    if digs[0].dir == n {
-      shape[0].inTurn = (left == globalTurn)
-    } else {
-      shape[0].inTurn = (right == globalTurn)
-    }
-  }
-  case s: {
-    if digs[0].dir == e {
-      shape[0].inTurn = (left == globalTurn)
-    } else {
-      shape[0].inTurn = (right == globalTurn)
-    }
-  }
-  case w: {
-    if digs[0].dir == n {
-      shape[0].inTurn = (right == globalTurn)
-    } else {
-      shape[0].inTurn = (left == globalTurn)
-    }
-  }
-  }
   shapes := [][]point{shape}
   sum := 0
   for len(shapes) > 0 {
