@@ -186,11 +186,23 @@ func main() {
   maximum := 0
   for x := 0; x < len(mapa[0]); x++ {
     maximum = max(maximum, getEnergy(mapa, ray{x, 0, n}))
+    if maximum == 8061 {
+      fmt.Printf("left %v\n", x)
+    }
     maximum = max(maximum, getEnergy(mapa, ray{x, len(mapa) - 1, s}))
+    if maximum == 8061 {
+      fmt.Printf("right: %v\n", x)
+    }
   }
   for y := 0; y < len(mapa); y++ {
     maximum = max(maximum, getEnergy(mapa, ray{0, y, w}))
+    if maximum == 8061 {
+      fmt.Printf("top: %v\n", y)
+    }
     maximum = max(maximum, getEnergy(mapa, ray{len(mapa[0]) - 1, y, e}))
+    if maximum == 8061 {
+      fmt.Printf("down: %v\n", y)
+    }
   }
 
   fmt.Printf("%v\n", maximum)

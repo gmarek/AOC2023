@@ -28,25 +28,6 @@ type dig struct {
   l int
 }
 
-func reflect(s *[]point, start, end int) {
-  for start < end {
-    tmp := (*s)[start]
-    (*s)[start] = (*s)[end]
-    (*s)[end] = tmp
-    start++
-    end--
-  }
-}
-
-func makeFirst(s *[]point, i int) {
-  if i == 0 {
-    return
-  }
-  reflect(s, 0, len(*s) - 1)
-  reflect(s, 0, len(*s) - i - 1)
-  reflect(s, len(*s) - i, len(*s) - 1)
-}
-
 func max(a, b int) int {
   if a > b {
     return a
@@ -63,6 +44,8 @@ func min(a, b int) int {
 
 type point struct {
   x, y int
+  from int
+  inTurn bool
 }
 
 func abs(a int) int {
@@ -72,18 +55,18 @@ func abs(a int) int {
   return a
 }
 
-func nextInd(i int, s *[]point) int {
-  return (i+1) % len(*s)
+func nextInd(i int, s []point) int {
+  return (i+1) % len(s)
 }
 
-func prevInd(i int, s *[]point) int {
+func prevInd(i int, s []point) int {
   if i == 0 {
-    return len(*s)-1
+    return len(s)-1
   }
   return i-1
 }
 
-func neigh(i int, s *[]point) []int {
+func neigh(i int, s []point) []int {
   return []int{prevInd(i, s), nextInd(i, s)}
 }
 
@@ -95,7 +78,7 @@ func cutRectangle(s []point) (int, [][]point) {
   minXInd := map[int]bool{}
   minX := int(1e10)
   nearMinX := int(1e10)
-  for i, p := range *s {
+  for i, p := range s {
     if p.x < minX {
       if minX != int(1e10) {
 	nearMinX = minX
@@ -113,11 +96,11 @@ func cutRectangle(s []point) (int, [][]point) {
     fmt.Printf("min: %v, second: %v\n", minX, nearMinX)
   }
 
-  if len(*s) == 4 {
+  if len(s) == 4 {
     r1 := abs(nearMinX - minX)
     r2 := 0
-    for i := range *s {
-      val := abs((*s)[i].y - (*s)[(i+1)%len(*s)].y)
+    for i := range s {
+      val := abs((s)[i].y - (s)[(i+1)%len(s)].y)
       if val > r2 {
 	r2 = val
       }
@@ -126,8 +109,7 @@ func cutRectangle(s []point) (int, [][]point) {
       fmt.Printf("last: %v * %v = %v\n", r1, r2, r1*r2)
     }
     ret := r1 * r2
-    *s = []point{}
-    return ret
+    return ret, [][]point{}
   }
   remMap := map[int]bool{}
   if debug {
@@ -138,46 +120,46 @@ func cutRectangle(s []point) (int, [][]point) {
     ns := neigh(i, s)
     if debug {
       fmt.Printf("========\n")
-      fmt.Printf("(%v) %v -> (%v) %v (%v) %v\n", i, (*s)[i], ns[0], (*s)[ns[0]], ns[1], (*s)[ns[1]])
+      fmt.Printf("(%v) %v -> (%v) %v (%v) %v\n", i, s[i], ns[0], s[ns[0]], ns[1], s[ns[1]])
     }
     if minXInd[ns[0]] {
       r1 := nearMinX - minX
-      r2 := abs((*s)[i].y - (*s)[ns[0]].y)
-      fmt.Printf("0) %v * %v = %v\n", r1, r2, r1*r2)
+      r2 := abs(s[i].y - s[ns[0]].y)
       if debug {
-	fmt.Printf("%v %v\n", (*s)[ns[0]], (*s)[i])
+	fmt.Printf("0) %v * %v = %v\n", r1, r2, r1*r2)
+	fmt.Printf("%v %v\n", s[ns[0]], s[i])
       }
       ret += r1 * r2
     }
     if minXInd[ns[1]] {
       r1 := nearMinX - minX
-      r2 := abs((*s)[i].y - (*s)[ns[1]].y)
-      fmt.Printf("1) %v * %v = %v\n", r1, r2, r1*r2)
+      r2 := abs(s[i].y - s[ns[1]].y)
       if debug {
-	fmt.Printf("%v %v\n", (*s)[ns[1]], (*s)[i])
+	fmt.Printf("1) %v * %v = %v\n", r1, r2, r1*r2)
+	fmt.Printf("%v %v\n", s[ns[1]], s[i])
       }
       ret += r1 * r2
     }
   }
 
   for i := range minXInd {
-    (*s)[i].x = nearMinX
+    s[i].x = nearMinX
   }
   if debug {
-    fmt.Printf("post squash: %v\n", *s)
+    fmt.Printf("post squash: %v\n", s)
   }
 
   for i := range minXInd {
     ns := neigh(i, s)
-    if (*s)[i].x == (*s)[ns[0]].x && (*s)[i].y == (*s)[ns[0]].y {
+    if s[i].x == s[ns[0]].x && s[i].y == s[ns[0]].y {
       if debug {
-	fmt.Printf("removing duplicate %v: %v\n", i, (*s)[i])
+	fmt.Printf("removing duplicate %v: %v\n", i, s[i])
       }
       remMap[i] = true
     }
-    if (*s)[i].x == (*s)[ns[1]].x && (*s)[i].y == (*s)[ns[1]].y {
+    if s[i].x == s[ns[1]].x && s[i].y == s[ns[1]].y {
       if debug {
-	fmt.Printf("removing duplicate %v: %v\n", i, (*s)[i])
+	fmt.Printf("removing duplicate %v: %v\n", i, s[i])
       }
       remMap[i] = true
     }
@@ -190,15 +172,15 @@ func cutRectangle(s []point) (int, [][]point) {
   sort.Ints(remList)
 
   for i := len(remList) - 1; i >= 0; i-- {
-    remove(s, remList[i])
+    remove(&s, remList[i])
   }
 
   if debug {
-    fmt.Printf("no duplicates: %v\n", *s)
+    fmt.Printf("no duplicates: %v\n", s)
   }
 
   slice := map[int]bool{}
-  for i, v := range *s {
+  for i, v := range s {
     if v.x == nearMinX {
       slice[i] = true
     }
@@ -210,7 +192,7 @@ func cutRectangle(s []point) (int, [][]point) {
     ns := neigh(k, s)
     same := true
     for _, n := range ns {
-      if (*s)[k].x != (*s)[n].x {
+      if s[k].x != s[n].x {
 	same = false
 	break
       }
@@ -225,17 +207,86 @@ func cutRectangle(s []point) (int, [][]point) {
   sort.Ints(remList)
 
   for i := len(remList) - 1; i >= 0; i-- {
-    remove(s, remList[i])
+    remove(&s, remList[i])
   }
+
+  // detect split...
+  retShapes := [][]point{}
+
+  minList := []int{}
+  for i, v := range s {
+    if v.x == nearMinX {
+      minList = append(minList, i)
+    }
+  }
+  sort.Ints(minList)
+
+  splitOn := []int{}
+  for _, i := range minList {
+    if !s[i].inTurn {
+      splitOn = append(splitOn, i)
+    }
+  }
+
+  if len(splitOn) == 0 {
+    if len(s) > 0 {
+      retShapes = append(retShapes, s)
+    }
+  } else {
+
+    mapped := map[int]bool{}
+    for _, i := range splitOn {
+      connected := []point{s[i]}
+      mapped[i] = true
+      forward := false
+      n := nextInd(i, s)
+      if s[n].x != nearMinX {
+	forward = true
+      }
+      if forward {
+        for s[n].x != nearMinX {
+	  connected = append(connected, s[n])
+	  mapped[n] = true
+	  n = nextInd(n, s)
+	}
+      } else {
+	n = prevInd(i, s)
+	for s[n].x != nearMinX {
+	  connected = append(connected, s[n])
+	  mapped[n] = true
+	  n = prevInd(n, s)
+        }
+      }
+      connected = append(connected, s[n])
+      if debug {
+	fmt.Printf("connected: %v\n", connected)
+      }
+      retShapes = append(retShapes, connected)
+    }
+
+    remS := []point{}
+    for i := range s {
+      if !mapped[i] {
+	remS = append(remS, s[i])
+      }
+    }
+    if debug {
+      fmt.Printf("remained: %v\n", remS)
+    }
+  }
+
+  // post split...
 
   if debug {
     fmt.Printf("return: %v\n", ret/2)
   }
-  return ret / 2
+  return ret / 2, retShapes
 }
 
 func remove(s *[]point, i int) {
-  fmt.Printf("remove: %v (%v) from %v\n", i, (*s)[i], *s)
+  if debug {
+    fmt.Printf("remove: %v (%v) from %v\n", i, (*s)[i], *s)
+  }
   if i == 0 {
     *s = (*s)[1:]
   } else if i == len(*s) - 1 {
@@ -297,7 +348,7 @@ func main() {
     digs = append(digs, d)
   }
 
-  shape := []point{{0, 0}}
+  shape := []point{{0, 0, digs[len(digs)-1].dir, false}}
   turns := []int{}
   prev := -1
   globalTurn := -1
@@ -306,6 +357,7 @@ func main() {
       globalTurn = turns[0]
     }
     offset := 0
+    turn := 5
     if prev == -1 {
       prev = d.dir
     } else {
@@ -314,42 +366,53 @@ func main() {
 	if prev == e {
 	  offset = insertTurn(&turns, left, globalTurn)
 	  shape[len(shape)-1].x += offset
+	  turn = left
 	} else {
 	  offset = insertTurn(&turns, right, globalTurn)
 	  shape[len(shape)-1].x -= offset
+	  turn = right
 	}
       }
       case e: {
 	if prev == n {
 	  offset = insertTurn(&turns, right, globalTurn)
 	  shape[len(shape)-1].y -= offset
+	  turn = right
 	} else {
 	  offset = insertTurn(&turns, left, globalTurn)
 	  shape[len(shape)-1].y += offset
+	  turn = left
 	}
       }
       case s: {
 	if prev == e {
 	  offset = insertTurn(&turns, right, globalTurn)
 	  shape[len(shape)-1].x += offset
+	  turn = right
 	} else {
 	  offset = insertTurn(&turns, left, globalTurn)
 	  shape[len(shape)-1].x -= offset
+	  turn = left
 	}
       }
       case w: {
 	if prev == n {
 	  offset = insertTurn(&turns, left, globalTurn)
 	  shape[len(shape)-1].y -= offset
+	  turn = left
 	} else {
 	  offset = insertTurn(&turns, right, globalTurn)
 	  shape[len(shape)-1].y += offset
+	  turn = right
 	}
       }
       }
       prev = d.dir
     }
-    next := point{shape[len(shape) - 1].x, shape[len(shape) - 1].y}
+    next := point{shape[len(shape) - 1].x, shape[len(shape) - 1].y, d.dir, len(turns) < 2}
+    if len(turns) == 2 {
+      shape[len(shape)-1].inTurn = (turn == globalTurn)
+    }
     switch d.dir {
     case n: {
       next.y -= d.l
@@ -364,14 +427,55 @@ func main() {
       next.x -= d.l
     }
     }
-    fmt.Printf("insert %v\n", next)
     shape = append(shape, next)
   }
 
   shape = shape[:len(shape)-1]
+  if debug {
+    fmt.Printf("global turns: %v\n", globalTurn)
+  }
+  switch digs[len(digs)-1].dir {
+  case n: {
+    if digs[0].dir == e {
+      shape[0].inTurn = (right == globalTurn)
+    } else {
+     shape[0].inTurn = (left == globalTurn)
+    }
+  }
+  case e: {
+    if digs[0].dir == n {
+      shape[0].inTurn = (left == globalTurn)
+    } else {
+      shape[0].inTurn = (right == globalTurn)
+    }
+  }
+  case s: {
+    if digs[0].dir == e {
+      shape[0].inTurn = (left == globalTurn)
+    } else {
+      shape[0].inTurn = (right == globalTurn)
+    }
+  }
+  case w: {
+    if digs[0].dir == n {
+      shape[0].inTurn = (right == globalTurn)
+    } else {
+      shape[0].inTurn = (left == globalTurn)
+    }
+  }
+  }
+  shapes := [][]point{shape}
   sum := 0
-  for len(shape) > 0 {
-    sum += cutRectangle(&shape)
+  for len(shapes) > 0 {
+    newShapes := [][]point{}
+    for _, s := range shapes {
+      v, newShape := cutRectangle(s)
+      sum += v
+      for _, ns := range newShape {
+	newShapes = append(newShapes, ns)
+      }
+    }
+    shapes = newShapes
   }
 
   fmt.Printf("%v\n", sum)
