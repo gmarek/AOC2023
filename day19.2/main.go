@@ -13,7 +13,7 @@ import (
 )
 
 var prod = flag.Bool("real", false, "run on real input")
-var debug = true
+var debug = false
 
 const x = 0
 const m = 1
@@ -22,6 +22,20 @@ const s = 3
 
 const lt = 0
 const gt = 1
+
+func min(a, b int) int {
+  if a < b {
+    return a
+  }
+  return b
+}
+
+func max(a, b int) int {
+  if a > b {
+    return a
+  }
+  return b
+}
 
 type tool struct {
   v map[int]int
@@ -34,35 +48,63 @@ type op struct {
   next string
 }
 
-func (o *op) process(t tool) string {
-  v := t.v[o.prop]
-  if o.oper == lt {
-    if v < o.threshold {
-      return o.next
-    }
-  } else {
-    if v > o.threshold {
-      return o.next
-    }
-  }
-  return ""
+type interval struct {
+  min, max int
 }
 
 type filter struct {
+  ins [][]interval
   name string
   ops []op
   dflt string
 }
 
-func (f *filter) processTool(t tool) string {
-  ret := ""
-  for _, o := range f.ops {
-    ret = o.process(t)
-    if ret != "" {
-      return ret
-    }
+func (f *filter) processInputs(fMap map[string]*filter) []string {
+  if debug {
+    fmt.Printf("processing: %v\n", *f)
   }
-  return f.dflt
+  outs := []string{}
+  for _, in := range f.ins {
+    if debug {
+      fmt.Printf("process input: %v\n", in)
+    }
+    for _, o := range f.ops {
+      if o.oper == lt {
+	if o.threshold < in[o.prop].min {
+	  continue
+	}
+	outs = append(outs, o.next)
+	if o.threshold > in[o.prop].max {
+	  newIns := append(fMap[o.next].ins, in)
+	  (*fMap[o.next]).ins = newIns
+	  break
+	}
+	newMap := []interval{in[0], in[1], in[2], in[3]}
+	newMap[o.prop].max = o.threshold - 1
+	fMap[o.next].ins = append(fMap[o.next].ins, newMap)
+	in[o.prop].min = o.threshold
+      } else {  // o.oper == gt
+	if o.threshold > in[o.prop].max {
+	  continue
+	}
+	outs = append(outs, o.next)
+	if o.threshold < in[o.prop].min {
+	  fMap[o.next].ins = append(fMap[o.next].ins, in)
+	  break
+	}
+	newMap := []interval{in[0], in[1], in[2], in[3]}
+	newMap[o.prop].min = o.threshold + 1
+	if debug {
+	  fmt.Printf("inserting into %v: %v\n", o.next, fMap[o.next])
+	}
+	fMap[o.next].ins = append(fMap[o.next].ins, newMap)
+	in[o.prop].max = o.threshold
+      }
+    }
+    outs = append(outs, f.dflt)
+    fMap[f.dflt].ins = append(fMap[f.dflt].ins, in)
+  }
+  return outs
 }
 
 func main() {
@@ -79,24 +121,10 @@ func main() {
 
   scan := bufio.NewScanner(bufio.NewReader(f))
 
-  scanTools := false
-  tools := []tool{}
-  filters := map[string]filter{}
+  filters := map[string]*filter{}
   for scan.Scan() {
     if scan.Text() == "" {
-      scanTools = true
-      continue
-    }
-    if scanTools {
-      t := tool{v: map[int]int{}}
-      stripped := strings.TrimSuffix(strings.TrimPrefix(scan.Text(), "{"), "}")
-      split := strings.Split(stripped, ",")
-      for i := range split {
-	v, _ := strconv.Atoi(split[i][2:])
-	t.v[i] = v
-      }
-      tools = append(tools, t)
-      continue
+      break
     }
     split := strings.Split(scan.Text(), "{")
     label := split[0]
@@ -132,22 +160,79 @@ func main() {
       v, _ := strconv.Atoi(string(bufVal))
       f.ops = append(f.ops, op{prop, sign, v, secondSplit[1]})
     }
-    filters[label] = f
+    filters[label] = &f
+  }
+  aFilt := filter{}
+  rFilt := filter{}
+  filters["A"] = &aFilt
+  filters["R"] = &rFilt
+
+  queue := []string{"in", "A"}
+  filters["in"].ins = [][]interval{{
+    {min:1, max:4000},
+    {min:1, max:4000},
+    {min:1, max:4000},
+    {min:1, max:4000},
+  }}
+
+  for len(queue) > 1 {
+    pop := queue[0]
+    queue = queue[1:]
+    if pop == "R" {
+      continue
+    }
+    if pop == "A" {
+      found := false
+      for _, v := range queue {
+	if v == "A" {
+	  found = true
+	  break
+	}
+      }
+      if !found {
+	queue = append(queue, "A")
+      }
+      continue
+    }
+
+    filter := filters[pop]
+    outs := filter.processInputs(filters)
+    queue = append(queue, outs...)
+    if debug {
+      fmt.Printf("------\n%v\n", queue)
+      fmt.Printf("%v\n+++++++\n", filters)
+    }
+  }
+
+  if debug {
+    fmt.Printf("A filter: %v\n", filters["A"])
   }
 
   sum := 0
-  for _, t := range tools {
-    f := "in"
-    for f != "A" && f != "R" {
-      tmp := filters[f]
-      f = tmp.processTool(t)
+  for _, in := range filters["A"].ins {
+    part := 1
+    for _, interval := range in {
+      part *= (interval.max - interval.min + 1)
     }
-    if f == "A" {
-      for _, v := range t.v {
-	sum += v
-      }
-    }
+    sum += part
   }
 
   fmt.Printf("%v\n", sum)
+
+/*
+  prevs := map[string][]string{}
+  for _, f := range filters {
+    for _, o := range f.ops {
+      prevs[o.next] = append(prevs[o.next], f.name)
+    }
+    prevs[f.dflt] = append(prevs[f.dflt], f.name)
+  }
+
+  for k, v := range prevs {
+    if len(v) > 1 {
+      fmt.Printf("long prev for %v: %v\n\n", k, v)
+    }
+  }
+  fmt.Printf("prevs: %v\n", prevs)
+*/
 }
